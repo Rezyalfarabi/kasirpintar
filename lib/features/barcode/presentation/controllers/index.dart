@@ -1,0 +1,1 @@
+export 'barcode_scan_controller.dart';
