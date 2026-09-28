@@ -78,6 +78,99 @@ void main() {
     expect(result.errors.first.data.barcode, '');
   });
 
+  test('barcode kembar di dalam satu berkas ditolak baris keduanya', () async {
+    final bytes = workbook([
+      headerRow(),
+      <CellValue>[
+        TextCellValue('Kopi'),
+        TextCellValue('111'),
+        TextCellValue('15000'),
+        TextCellValue('10'),
+        TextCellValue('Minuman'),
+      ],
+      <CellValue>[
+        TextCellValue('Teh'),
+        TextCellValue('222'),
+        TextCellValue('8000'),
+        TextCellValue('5'),
+        TextCellValue('Minuman'),
+      ],
+      <CellValue>[
+        TextCellValue('Kopiversi'),
+        TextCellValue('111'),
+        TextCellValue('16000'),
+        TextCellValue('7'),
+        TextCellValue('Minuman'),
+      ],
+    ]);
+
+    final result = await ExcelImportService().importFromBytes(bytes);
+
+    // Baris pertama tetap dipakai, yang ditandai baris ketiga.
+    expect(result.validCount, 2);
+    expect(result.errorCount, 1);
+    expect(result.errors.single.row, 4);
+    expect(result.errors.single.errors, contains('Barcode sama dengan baris 2'));
+    expect(result.errors.single.data.name, 'Kopiversi');
+  });
+
+  test('baris gagal validasi tidak menahan barcode-nya untuk baris sah berikutnya', () async {
+    final bytes = workbook([
+      headerRow(),
+      // Baris 2 sah sekali tetapi namanya kosong, jadi tidak akan pernah masuk
+      // ke database. Baris 4 memakai barcode sama dan harus tetap diterima.
+      <CellValue>[
+        TextCellValue(''),
+        TextCellValue('111'),
+        TextCellValue('15000'),
+        TextCellValue('10'),
+        TextCellValue('Minuman'),
+      ],
+      <CellValue>[
+        TextCellValue('Kopi Asli'),
+        TextCellValue('111'),
+        TextCellValue('15000'),
+        TextCellValue('10'),
+        TextCellValue('Minuman'),
+      ],
+    ]);
+
+    final result = await ExcelImportService().importFromBytes(bytes);
+
+    expect(result.validCount, 1);
+    expect(result.errorCount, 1);
+    expect(result.errors.single.errors, contains('Nama kosong'));
+    expect(result.errors.single.errors, isNot(contains(contains('Barcode sama'))));
+    expect(result.rows.single.name, 'Kopi Asli');
+  });
+
+  test('barcode berbeda huruf besar-kecil tetap dua produk', () async {
+    final bytes = workbook([
+      headerRow(),
+      <CellValue>[
+        TextCellValue('Kopi'),
+        TextCellValue('abc'),
+        TextCellValue('15000'),
+        TextCellValue('10'),
+        TextCellValue('Minuman'),
+      ],
+      <CellValue>[
+        TextCellValue('Kopi Lain'),
+        TextCellValue('ABC'),
+        TextCellValue('16000'),
+        TextCellValue('10'),
+        TextCellValue('Minuman'),
+      ],
+    ]);
+
+    final result = await ExcelImportService().importFromBytes(bytes);
+
+    // Constraint UNIQUE di SQLite juga case-sensitive, jadi menandainya
+    // duplikat akan menolak baris yang sebenarnya bisa tersimpan.
+    expect(result.errorCount, 0);
+    expect(result.validCount, 2);
+  });
+
   test('header tidak lengkap ditolak', () async {
     final bytes = workbook([
       <CellValue>[TextCellValue('nama'), TextCellValue('harga')],

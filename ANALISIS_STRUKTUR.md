@@ -196,12 +196,33 @@ Stok, Riwayat, dan pemindai.
 | Import produk dari Excel **tidak menerapkan batas panjang dan nilai** yang dipakai form manual: nama ≤ 100, kategori ≤ 50, barcode ≤ 50, harga ≤ 999999999, stok ≤ 999999. | `excel_import_service.dart:93` | Nilai di luar batas lolos dari Excel tapi ditolak form. Dua pintu masuk produk punya aturan berbeda. |
 | `stok` hasil impor dibaca `int.tryParse` **tanpa membuang pemisah ribuan**, berbeda dari `harga` dan dari `ExcelStockService`. | `excel_import_service.dart:88` | Teks `"10.000"` menjadi `0` tanpa pesan error. |
 | Kolom `kategori` **wajib ada sebagai header**, padahal nilainya boleh kosong dan di form kategori bersifat opsional. | `app_constants.dart:18` | Berkas tanpa kolom kategori ditolak, padahal tidak ada data yang hilang. |
-| **Barcode duplikat di dalam satu berkas** tidak dideteksi. | `excel_import_controller.dart:83` | Baris kedua dianggap "sudah ada" lalu dilewati atau ditimpa. |
+| **Barcode duplikat di dalam satu berkas** tidak dideteksi. | `excel_import_controller.dart:83` | Baris kedua dianggap "sudah ada" lalu dilewati atau ditimpa. **Sudah diperbaiki** — lihat catatan di bawah. |
 | Empat dependensi tidak terpakai di `lib/`: `permission_handler`, `cached_network_image`, `share_plus`, `uuid`. Resolver gambar memakai `NetworkImage` bawaan, bukan `cached_network_image`. | `pubspec.yaml` | Bobot build dan surface attack yang tidak perlu. |
 | `riverpod_annotation` + `riverpod_generator` ada sebagai dev dependency tetapi tidak dipakai — semua provider ditulis manual di `core/di/providers.dart`. | `pubspec.yaml` | codegen yang tidak perlu. |
 | Migrasi `schemaVersion` 1 → 2 → 3 belum lengkap. | `app_database.dart:92` | Pengguna versi lama bisa kehilangan data saat upgrade. |
 | Build Android gagal sebelum overhaul `compileSdk` (lihat bagian 8). | `android/build.gradle.kts` | Sudah diperbaiki. |
 | `mobile_scanner` dan `share_plus` masih menerapkan Kotlin Gradle Plugin lawas; Flutter akan menolak build seperti ini pada versi mendatang. | `pubspec.lock` | Peringatan, belum fatal. |
+
+### Perbaikan barcode kembar dalam satu berkas
+
+`ExcelImportService` sekarang menahan barcode yang sudah dipakai baris sebelumnya
+di berkas yang sama, dan melaporkan baris berikutnya sebagai
+`Barcode sama dengan baris N`. Baris pertama tetap dipakai.
+
+Tiga keputusan desain yang perlu dijaga kalau aturan ini diubah nanti:
+
+- **Pencocokan case-sensitive.** `abc` dan `ABC` tetap dua produk, sama seperti
+  constraint `UNIQUE` di SQLite yang juga case-sensitive. Menjadikannya
+  case-insensitive akan menolak baris yang sebenarnya bisa tersimpan.
+- **Barcode baru diklaim setelah baris lolos semua validasi lain.** Kalau baris
+  cacat ikut mengunci barcode-nya, baris sah berikutnya dengan barcode sama akan
+  ditolak tanpa alasan yang benar karena pendahulunya tidak pernah masuk.
+- **Baris pertama menang, bukan baris terakhir.** Ini yang membuat hasilnya
+  bisa diprediksi, dan pesan errornya menyebut nomor baris pendahuluanya.
+
+`ExcelStockService` sudah punya aturan serupa dengan kunci
+`barcode:<nilai>` atau `nama:<nilai lowercase>` ketika barcode kosong — beda
+kecil yang perlu diingat: import produk mewajibkan barcode, tambah stok tidak.
 
 ---
 
@@ -258,7 +279,7 @@ build pertama di Mac. Yang perlu dikerjakan manual di Mac:
    masuk produk punya aturan sama.
 2. Perbaiki pembacaan `stok` di impor Excel agar membuang pemisah ribuan seperti
    `harga`, dan laporkan angka yang gagal dibaca alih-alih diam-diam jadi 0.
-3. Tambahkan deteksi barcode duplikat di dalam satu berkas.
+3. Tambahkan deteksi barcode duplikat di dalam satu berkas. — **selesai**
 4. Buang dependensi yang tidak terpakai: `permission_handler`,
    `cached_network_image`, `share_plus`, `uuid`, `riverpod_annotation`.
 5. Lengkapi migrasi `schemaVersion` 1 → 2 → 3 sebelum ada rilis ke pengguna lama.

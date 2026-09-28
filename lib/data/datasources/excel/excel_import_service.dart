@@ -35,15 +35,22 @@ class ExcelImportService {
       final rows = <ExcelImportRow>[];
       final errors = <ExcelRowError>[];
 
+      // Barcode sudah menjadi kunci pencocokan produk di database, jadi dua
+      // baris dengan barcode sama di dalam satu berkas pasti bermaksud satu
+      // produk. Tanpa daftar ini baris kedua lolos validasi lalu diam-diam
+      // menimpa baris pertama, tergantung mode impor yang dipilih.
+      final firstRowByBarcode = <String, int>{};
+
       for (var i = 1; i <= sheet.maxRows; i++) {
         final row = sheet.row(i);
         if (row.isEmpty) continue;
 
         final rowData = _parseRow(row, headers);
-        final rowErrors = _validateRow(rowData, i + 1);
+        final rowNumber = i + 1;
+        final rowErrors = _validateRow(rowData, rowNumber, firstRowByBarcode);
 
         if (rowErrors.isNotEmpty) {
-          errors.add(ExcelRowError(row: i + 1, errors: rowErrors, data: rowData));
+          errors.add(ExcelRowError(row: rowNumber, errors: rowErrors, data: rowData));
         } else {
           rows.add(rowData);
         }
@@ -90,13 +97,32 @@ class ExcelImportService {
     );
   }
 
-  List<String> _validateRow(ExcelImportRow row, int rowNumber) {
+  List<String> _validateRow(
+    ExcelImportRow row,
+    int rowNumber,
+    Map<String, int> firstRowByBarcode,
+  ) {
     final errors = <String>[];
 
     if (row.name.isEmpty) errors.add('Nama kosong');
     if (row.barcode.isEmpty) errors.add('Barcode kosong');
     if (row.price <= 0) errors.add('Harga harus > 0');
     if (row.stock < 0) errors.add('Stok tidak boleh negatif');
+
+    // Barcode baru diklaim setelah baris ini lolos semua pemeriksaan lain.
+    // Kalau baris yang gagal validasi ikut diklaim, baris sah berikutnya yang
+    // memakai barcode sama akan ditandai duplikat padahal pendahuluanya tidak
+    // pernah masuk ke database.
+    if (errors.isNotEmpty || row.barcode.isEmpty) return errors;
+
+    // Pencocokan sengaja case-sensitive agar sama dengan constraint UNIQUE di
+    // SQLite, yang juga membedakan huruf besar dan kecil. Baris pertama tetap
+    // dipakai; hanya baris berikutnya yang ditandai supaya operator memilih,
+    // bukan membiarkan baris terakhir diam-diam menang.
+    final firstRow = firstRowByBarcode.putIfAbsent(row.barcode, () => rowNumber);
+    if (firstRow != rowNumber) {
+      errors.add('Barcode sama dengan baris $firstRow');
+    }
 
     return errors;
   }

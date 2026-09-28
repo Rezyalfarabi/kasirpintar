@@ -123,16 +123,24 @@ diimpor walau ada baris lain yang gagal divalidasi.
 
 ---
 
-## 5.-precision Aturan Duplikat Barcode
+## 5. Aturan Duplikat Barcode
 
 | Situasi | Yang terjadi |
 | --- | --- |
+| Barcode **sama muncul dua kali di dalam satu berkas** | baris pertama tetap dipakai, baris berikutnya dilaporkan sebagai error: `Baris 5: Barcode sama dengan baris 2`. Baris yang error tidak diimpor. |
 | Barcode sudah ada di database, mode Lewati Duplikat | dilewati |
 | Barcode sudah ada di database, mode Impor | diperbarui |
-| Barcode **sama muncul dua kali di dalam satu berkas** | perilaku tidak konsisten: baris pertama masuk, baris kedua dianggap "sudah ada" lalu dilewati atau ditimpa. Sebaiknya hindari. |
+| Barcode kembar dan baris yang berulang punya nama kosong atau harga tidak valid | baris cacat tidak mengunci barcode-nya, jadi baris sah berikutnya dengan barcode sama tetap diterima |
 
-Deteksi duplikat di dalam berkas belum ada di `ExcelImportService` — ini
-perbedaan nyata dibanding `ExcelStockService` yang sudah menjaganya.
+Tiga baris terakhir punya konsekuensi praktis:
+
+- **Baris pertama menang, bukan baris terakhir.** Kalau ada dua baris dengan
+  barcode sama, perbaiki manual di Excel lalu unggah ulang — jangan bergantung
+  pada mana yang kebetulan dibaca lebih dulu.
+- **Duplikat dibedakan huruf besar-kecil.** `abc` dan `ABC` dianggap dua
+  produk, sama seperti constraint `UNIQUE` di SQLite yang juga case-sensitive.
+- **Nomor baris yang disebut adalah nomor di Excel**, jadi bisa langsung dicari
+  di berkas aslinya.
 
 ---
 
@@ -212,5 +220,6 @@ unggah ulang berkas itu.
 | `Nama kosong` / `Barcode kosong` | Sel kosong atau hanya berisi spasi. |
 | `Harga harus > 0` | Harga 0, negatif, desimal (`15000.50`), atau ada teks di dalamnya (`Rp15.000`). |
 | `Stok tidak boleh negatif` | Angka stok bernilai minus. |
+| `Barcode sama dengan baris N` | Barcode itu sudah dipakai baris N di berkas yang sama. Hapus atau ganti salah satunya, lalu unggah ulang. Baris pertama tetap dipakai. |
 | `Gagal membaca file: ...` | Berkas korup atau didukung. Simpan ulang dari Excel. |
 | Preview menunjukkan banyak baris error | Buka berkas aslinya, perbaiki berdasarkan nomor baris yang disebut, unggah ulang. Baris yang valid tetap bisa diimpor tanpa menunggu perbaikan. |
