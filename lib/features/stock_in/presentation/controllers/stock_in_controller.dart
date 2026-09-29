@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kasir_pintar/core/di/providers.dart';
 import 'package:kasir_pintar/core/utils/platform_files.dart';
@@ -140,10 +139,22 @@ class StockInController extends StateNotifier<StockInState> {
   Future<void> loadFile(Uint8List bytes, String fileName) async {
     state = StockInState(fileName: fileName, fileBytes: bytes, isParsing: true);
 
+    // DEBUG sementara: titik pertama alur — file dari FilePicker.
+    debugPrint('[ExcelDebug] FILE NAME: $fileName');
+    debugPrint('[ExcelDebug] EXTENSION: ${fileName.contains('.') ? fileName.split('.').last : '(tidak ada)'}');
+    debugPrint('[ExcelDebug] FILE BYTES: ${bytes.length}');
+
     final result = _stockService.parseFromBytes(bytes);
     if (!result.success) {
       state = state.copyWith(isParsing: false, error: result.error);
       return;
+    }
+
+    for (final row in result.rows) {
+      debugPrint(
+        '[ExcelDebug] parsed: baris ${row.row} '
+        'barcode="${row.barcode}" nama="${row.name}" qty=${row.quantity}',
+      );
     }
 
     final products = await _repository.getAllProducts();
@@ -157,6 +168,11 @@ class StockInController extends StateNotifier<StockInState> {
     final items = result.rows
         .map((row) => _match(row, byBarcode, byName, state.mode))
         .toList();
+
+    // DEBUG sementara: bedakan VALIDATION ERROR vs DATABASE NOT FOUND.
+    debugPrint('[ExcelDebug] PRODUK COCOK: ${items.where((i) => i.isMatched).length}');
+    debugPrint('[ExcelDebug] TIDAK DITEMUKAN: ${items.where((i) => !i.isMatched).length}');
+    debugPrint('[ExcelDebug] BARIS ERROR: ${result.errors.length}');
 
     state = state.copyWith(
       isParsing: false,

@@ -66,15 +66,14 @@ Contoh berkas yang valid:
 ### `nama`
 
 - Wajib diisi, tidak boleh hanya spasi.
-- Batas panjang yang konsisten dengan form manual: 100 karakter.
-  Impor Excel **belum** menegakkan batas ini (lihat bagian 6).
+- Maksimal 100 karakter, sama seperti form tambah produk.
 
 ### `barcode`
 
 - Wajib diisi, tidak boleh hanya spasi.
 - Bentuknya bebas teks, bukan harus angka: `8991002101011`, `ABC-001`, dan
   `200/PL` semuanya sah karena kolomnya bertipe teks.
-- Panjang sampai 50 karakter.
+- Maksimal 50 karakter.
 - **Harus unik.** Barcode yang sudah ada di database dicocokkan lewat
   `getProductByBarcode`; lihat bagian 5.
 
@@ -84,17 +83,17 @@ Contoh berkas yang valid:
 - Pemisah ribuan dibuang otomatis, jadi `15000`, `15.000`, dan `15,000`
   semuanya dibaca sebagai 15000.
 - Harus lebih besar dari 0. `0` dan negatif ditolak.
+- Maksimal 999999999, sama seperti form tambah produk.
 - Teks dengan satuan ikut serta tidak akan terbaca: `Rp15.000` gagal, dan
   baris itu dilaporkan sebagai error.
 
 ### `stok`
 
-- Boleh nol, tidak boleh negatif.
-- Sel numerik biasa apa pun aman: `0`, `24`, `10000`.
-- **Hindari titik atau koma sebagai pemisah ribuan di kolom ini.** Tulisan
-  `"10.000"` tidak akan dibaca sebagai sepuluh ribu; kolom ini tidak
-  membuang pemisah ribuan seperti kolom `harga`, dan hasilnya menjadi `0`
-  tanpa pesan error. Pakai angka polos `10000`.
+- Boleh nol, tidak boleh negatif. Negatif ditolak dengan pesan
+  `Stok tidak boleh negatif`.
+- Maksimal 999999, sama seperti form tambah produk.
+- Pemisah ribuan juga terbaca seperti kolom `harga`: `10.000`, `10,000`, dan
+  `10000` semuanya dibaca sebagai 10000.
 
 ### `kategori`
 
@@ -106,20 +105,26 @@ Contoh berkas yang valid:
 ## 4. Alur di Layar
 
 1. **Produk → ikon impor** (tooltip: "Tambah stok dari Excel").
-2. Ketuk kotak **Pilih File Excel**.
-3. Aplikasi langsung mem-parse berkas dan menampilkan preview:
-   jumlah baris valid, jumlah baris error, dan tabel isinya.
-4. Baris error ditampilkan terpisah di kotak merah, lengkap dengan nomor
-   baris dan alasannya.
+2. Halaman upload menampilkan **ketentuan produk** yang ditegakkan impor.
+   Baris yang tidak memenuhi ketentuan ini ditolak dengan alasan yang jelas,
+   bukan dilewati diam-diam.
+3. Ketuk kotak **Upload File Excel**, pilih berkas `.xlsx` (bisa juga lewat
+   tombol **Unduh Template**).
+4. Aplikasi mem-parse berkas dan menampilkan preview: jumlah baris valid,
+   jumlah baris ditolak, tabel isi yang akan dibuat, dan daftar error per baris.
 5. Pilih salah satu dari dua tombol:
 
 | Tombol | Perilaku pada barcode yang sudah ada |
 | --- | --- |
 | **Lewati Duplikat** | Produk lama dibiarkan apa adanya. Hanya barcode baru yang dibuat. |
-| **Impor N Produk** | Produk lama **diperbarui**: nama, harga, stok, dan kategori ditimpa dengan isi berkas. Perbarui stok tercatat di riwayat dengan sumber `excel`. |
+| **Tambah N Produk** | Produk lama **diperbarui**: nama, harga, stok, dan kategori ditimpa dengan isi berkas. Perbarui stok tercatat di riwayat dengan sumber `excel`. |
 
 Baris error **tidak pernah** diimpor, dari mode mana pun. Baris yang valid tetap
 diimpor walau ada baris lain yang gagal divalidasi.
+
+6. Setelah selesai, aplikasi menampilkan rekap: produk baru, produk diperbarui,
+   produk dilewati, dan baris ditolak, plus tombol **Lihat Daftar Produk** untuk
+   memeriksa hasilnya.
 
 ---
 
@@ -144,23 +149,18 @@ Tiga baris terakhir punya konsekuensi praktis:
 
 ---
 
-## 6. Batas yang Belum Ditegakkan
+## 6. Batas yang Ditegakkan
 
-`ExcelImportService` memvalidasi empat hal saja: nama tidak kosong, barcode
-tidak kosong, harga lebih besar dari nol, stok tidak negatif. Ia **tidak**
-menegakkan batas yang sama dengan form manual:
+Impor Excel menegakkan batas yang sama persis dengan form tambah produk.
+Produk yang ditolak form manual pasti ditolak impor, dan sebaliknya:
 
-| Nilai | Batas di form manual | Status di impor Excel |
-| --- | --- | --- |
-| Panjang nama | 100 karakter | tidak ditegakkan |
-| Panjang kategori | 50 karakter | tidak ditegakkan |
-| Panjang barcode | 50 karakter | tidak ditegakkan |
-| Harga maksimum | 999999999 | tidak ditegakkan |
-| Stok maksimum | 999999 | tidak ditegakkan |
-
-Praktisnya: produk yang sama bisa berhasil diimpor lewat Excel dan ditolak
-kalau diketik manual. Selama batas ini belum diperbaiki, isi nilai yang wajar
-dan Perhatikan panjang kolom.
+| Nilai | Batas |
+| --- | --- |
+| Panjang nama | 100 karakter |
+| Panjang kategori | 50 karakter |
+| Panjang barcode | 50 karakter |
+| Harga maksimum | 999999999, minimum 1 |
+| Stok maksimum | 999999, minimum 0 |
 
 ---
 
@@ -218,7 +218,9 @@ unggah ulang berkas itu.
 | `File Excel kosong atau tidak valid` | Berkas rusak, atau sebenarnya `.xls`/`.csv` yang ekstensinya diganti. Simpan ulang dari Excel sebagai `.xlsx`. |
 | `File Excel tidak memiliki data (hanya header)` | Ada judul kolom tapi tidak ada satu pun baris produk. |
 | `Nama kosong` / `Barcode kosong` | Sel kosong atau hanya berisi spasi. |
-| `Harga harus > 0` | Harga 0, negatif, desimal (`15000.50`), atau ada teks di dalamnya (`Rp15.000`). |
+| `Harga harus lebih dari 0` | Harga 0, negatif, desimal (`15000.50`), atau ada teks di dalamnya (`Rp15.000`). |
+| `Harga maksimal 999999999` | Harga melebihi batas form tambah produk. |
+| `Nama maksimal ...` / `Barcode maksimal ...` / `Kategori maksimal ...` | Panjang melebihi batas yang sama dengan form manual. |
 | `Stok tidak boleh negatif` | Angka stok bernilai minus. |
 | `Barcode sama dengan baris N` | Barcode itu sudah dipakai baris N di berkas yang sama. Hapus atau ganti salah satunya, lalu unggah ulang. Baris pertama tetap dipakai. |
 | `Gagal membaca file: ...` | Berkas korup atau didukung. Simpan ulang dari Excel. |

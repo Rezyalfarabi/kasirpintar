@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:excel/excel.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kasir_pintar/core/constants/app_constants.dart';
 import 'package:kasir_pintar/data/datasources/excel/excel_import_service.dart';
 
 void main() {
@@ -169,6 +170,229 @@ void main() {
     // duplikat akan menolak baris yang sebenarnya bisa tersimpan.
     expect(result.errorCount, 0);
     expect(result.validCount, 2);
+  });
+
+  test('pemisah ribuan pada harga dan stok terbaca', () async {
+    final bytes = workbook([
+      headerRow(),
+      <CellValue>[
+        TextCellValue('Kopi'),
+        TextCellValue('111'),
+        TextCellValue('15.000'),
+        TextCellValue('10.000'),
+        TextCellValue('Minuman'),
+      ],
+      <CellValue>[
+        TextCellValue('Teh'),
+        TextCellValue('222'),
+        TextCellValue('8,000'),
+        TextCellValue('999.999'),
+        TextCellValue('Minuman'),
+      ],
+    ]);
+
+    final result = await ExcelImportService().importFromBytes(bytes);
+
+    expect(result.errorCount, 0);
+    expect(result.rows.first.price, 15000);
+    expect(result.rows.first.stock, 10000);
+    expect(result.rows.last.price, 8000);
+    expect(result.rows.last.stock, 999999);
+  });
+
+  test('harga desimal ditolak, bukan jadi 1500050', () async {
+    final bytes = workbook([
+      headerRow(),
+      <CellValue>[
+        TextCellValue('Kopi'),
+        TextCellValue('111'),
+        TextCellValue('15000.50'),
+        TextCellValue('10'),
+        TextCellValue('Minuman'),
+      ],
+    ]);
+
+    final result = await ExcelImportService().importFromBytes(bytes);
+
+    expect(result.validCount, 0);
+    expect(
+      result.errors.single.errors,
+      contains('Harga bukan angka: "15000.50"'),
+    );
+  });
+
+  test('harga dan stok berteks ditolak dengan isi yang disebut', () async {
+    final bytes = workbook([
+      headerRow(),
+      <CellValue>[
+        TextCellValue('Kopi'),
+        TextCellValue('111'),
+        TextCellValue('Rp15.000'),
+        TextCellValue('10 pcs'),
+        TextCellValue('Minuman'),
+      ],
+    ]);
+
+    final result = await ExcelImportService().importFromBytes(bytes);
+
+    expect(result.validCount, 0);
+    expect(result.errors.single.errors, contains('Harga bukan angka: "Rp15.000"'));
+    expect(result.errors.single.errors, contains('Stok bukan angka: "10 pcs"'));
+  });
+
+  group('batas yang sama dengan form tambah produk', () {
+    test('nama, kategori, dan barcode melewati batas ditolak', () async {
+      final bytes = workbook([
+        headerRow(),
+        <CellValue>[
+          TextCellValue('N' * (AppConstants.maxNameLength + 1)),
+          TextCellValue('111'),
+          TextCellValue('15000'),
+          TextCellValue('10'),
+          TextCellValue('Minuman'),
+        ],
+        <CellValue>[
+          TextCellValue('Kopi'),
+          TextCellValue('B' * (AppConstants.maxBarcodeLength + 1)),
+          TextCellValue('15000'),
+          TextCellValue('10'),
+          TextCellValue('Minuman'),
+        ],
+        <CellValue>[
+          TextCellValue('Teh'),
+          TextCellValue('222'),
+          TextCellValue('15000'),
+          TextCellValue('10'),
+          TextCellValue('K' * (AppConstants.maxCategoryLength + 1)),
+        ],
+      ]);
+
+      final result = await ExcelImportService().importFromBytes(bytes);
+
+      expect(result.validCount, 0);
+      expect(
+        result.errors.map((e) => e.errors.single).toList(),
+        containsAll(<String>[
+          'Nama maksimal ${AppConstants.maxNameLength} karakter',
+          'Barcode maksimal ${AppConstants.maxBarcodeLength} karakter',
+          'Kategori maksimal ${AppConstants.maxCategoryLength} karakter',
+        ]),
+      );
+    });
+
+    test('tepat di batas masih diterima', () async {
+      final bytes = workbook([
+        headerRow(),
+        <CellValue>[
+          TextCellValue('N' * AppConstants.maxNameLength),
+          TextCellValue('B' * AppConstants.maxBarcodeLength),
+          TextCellValue('${AppConstants.maxPrice}'),
+          TextCellValue('${AppConstants.maxStock}'),
+          TextCellValue('K' * AppConstants.maxCategoryLength),
+        ],
+      ]);
+
+      final result = await ExcelImportService().importFromBytes(bytes);
+
+      expect(result.errorCount, 0);
+      expect(result.rows.single.name.length, AppConstants.maxNameLength);
+      expect(result.rows.single.price, AppConstants.maxPrice);
+      expect(result.rows.single.stock, AppConstants.maxStock);
+    });
+
+    test('harga dan stok melewati batas maksimum ditolak', () async {
+      final bytes = workbook([
+        headerRow(),
+        <CellValue>[
+          TextCellValue('Kopi Mahal'),
+          TextCellValue('111'),
+          TextCellValue('${AppConstants.maxPrice + 1}'),
+          TextCellValue('10'),
+          TextCellValue('Minuman'),
+        ],
+        <CellValue>[
+          TextCellValue('Teh Gudang'),
+          TextCellValue('222'),
+          TextCellValue('8000'),
+          TextCellValue('${AppConstants.maxStock + 1}'),
+          TextCellValue('Minuman'),
+        ],
+      ]);
+
+      final result = await ExcelImportService().importFromBytes(bytes);
+
+      expect(result.validCount, 0);
+      expect(
+        result.errors.first.errors,
+        contains('Harga maksimal ${AppConstants.maxPrice}'),
+      );
+      expect(
+        result.errors.last.errors,
+        contains('Stok maksimal ${AppConstants.maxStock}'),
+      );
+    });
+
+    test('harga dan stok negatif ditolak dengan pesan yang tepat', () async {
+      final bytes = workbook([
+        headerRow(),
+        <CellValue>[
+          TextCellValue('Kopi'),
+          TextCellValue('111'),
+          TextCellValue('-15000'),
+          TextCellValue('-2'),
+          TextCellValue('Minuman'),
+        ],
+      ]);
+
+      final result = await ExcelImportService().importFromBytes(bytes);
+
+      expect(result.validCount, 0);
+      expect(result.errors.single.errors, contains('Harga harus lebih dari 0'));
+      expect(result.errors.single.errors, contains('Stok tidak boleh negatif'));
+    });
+
+    test('harga nol ditolak sebagai nilai yang tidak valid, bukan sebagai batas maksimum', () async {
+      final bytes = workbook([
+        headerRow(),
+        <CellValue>[
+          TextCellValue('Kopi'),
+          TextCellValue('222'),
+          TextCellValue('0'),
+          TextCellValue('5'),
+          TextCellValue('Minuman'),
+        ],
+      ]);
+
+      final result = await ExcelImportService().importFromBytes(bytes);
+
+      // Harga nol adalah batas bawah, bukan batas atas. Pesan yang menyebut
+      // batas maksimum membuat operator mengira angkanya kelewat besar.
+      expect(result.validCount, 0);
+      expect(result.errors.single.errors, contains('Harga harus lebih dari 0'));
+      expect(
+        result.errors.single.errors,
+        isNot(contains('Harga maksimal ${AppConstants.maxPrice}')),
+      );
+    });
+
+    test('harga dan stok tepat di batas tetap diterima', () async {
+      final bytes = workbook([
+        headerRow(),
+        <CellValue>[
+          TextCellValue('Kopi'),
+          TextCellValue('333'),
+          TextCellValue('${AppConstants.maxPrice}'),
+          TextCellValue('${AppConstants.maxStock}'),
+          TextCellValue('Minuman'),
+        ],
+      ]);
+
+      final result = await ExcelImportService().importFromBytes(bytes);
+
+      expect(result.validCount, 1);
+      expect(result.rows.single.price, AppConstants.maxPrice);
+      expect(result.rows.single.stock, AppConstants.maxStock);
+    });
   });
 
   test('header tidak lengkap ditolak', () async {

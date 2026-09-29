@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:kasir_pintar/core/theme/app_colors.dart';
 import 'package:kasir_pintar/core/theme/app_radius.dart';
-import 'package:kasir_pintar/core/theme/app_text_styles.dart';
 
 class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
   final String? title;
@@ -58,7 +57,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => Size.fromHeight(56 + (showBottomBorder ? 1 : 0));
 }
 
-/// Penanda aplikasi untuk bar atas: kotak hitam bertuliskan inisial.
+/// Penanda aplikasi untuk bar atas: kotak hitam dengan ikon aplikasi.
 class AppBrandMark extends StatelessWidget {
   final double size;
 
@@ -69,18 +68,14 @@ class AppBrandMark extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      alignment: Alignment.center,
+      padding: EdgeInsets.all(size * 0.16),
       decoration: BoxDecoration(
         color: AppColors.baseBlack,
         borderRadius: BorderRadius.circular(AppRadius.button),
       ),
-      child: Text(
-        'KP',
-        style: AppTextStyles.badge.copyWith(
-          color: AppColors.accentYellow,
-          fontSize: size * 0.4,
-          letterSpacing: 0.5,
-        ),
+      child: Image.asset(
+        'img/iconaplikasikasir.png',
+        fit: BoxFit.contain,
       ),
     );
   }

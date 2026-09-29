@@ -83,7 +83,9 @@ memakai conditional import.
 
 Berkas harus **`.xlsx`** (bukan `.xls` atau `.csv`), **sheet pertama**, baris 1
 berisi judul kolom. Lima kolom wajib: `nama`, `barcode`, `harga`, `stok`,
-`kategori`. `harga` harus bilangan bulat > 0 dan `stok` tidak boleh negatif.
+`kategori`. `harga` harus bilangan bulat 1–999999999 dan `stok` harus 0–999999;
+pemisah ribuan (`15.000`) terbaca. Batas panjang dan nilai impor sama persis
+dengan form tambah produk.
 Detail lengkap termasuk jebakan format ada di
 [`PANDUAN_IMPORT_EXCEL.md`](PANDUAN_IMPORT_EXCEL.md).
 
@@ -91,7 +93,7 @@ Detail lengkap termasuk jebakan format ada di
 
 ```bash
 flutter analyze   # harus "No issues found!"
-flutter test      # 71 test
+flutter test      # 93 test
 ```
 
 ## Lisensi

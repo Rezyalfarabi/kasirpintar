@@ -7,7 +7,7 @@ otomatis dan checklist manual di browser.
 
 ```bash
 flutter analyze                          # harus "No issues found!"
-flutter test                             # 71 test, semua lulus
+flutter test                             # 93 test, semua lulus
 flutter run -d chrome --web-port=8080
 ```
 
@@ -39,7 +39,7 @@ cd build/web && grep -c "Tambah Stok" main.dart.js   # harus > 0
 
 ---
 
-## 1. Test otomatis (71 test, semua lulus)
+## 1. Test otomatis (93 test, semua lulus)
 
 Test alur memakai database drift in-memory lewat
 `AppDatabase.withExecutor(NativeDatabase.memory())` plus repository asli (tanpa
@@ -51,7 +51,7 @@ hanya tampilan dan interaksinya yang diuji.
 | `flows/product_flow_test.dart` | 4 | CRUD produk, stok absolut & relatif, filter, soft delete |
 | `flows/checkout_flow_test.dart` | 5 | Aritmetika keranjang, pembayaran, struk, penolakan |
 | `flows/receipt_pdf_test.dart` | 1 | Byte PDF struk valid |
-| `flows/excel_import_test.dart` | 4 | Parsing berkas produk baru + validasi header |
+| `flows/excel_import_test.dart` | 14 | Parsing produk, validasi header, desimal, pemisah ribuan, duplikat, batas sama form, template |
 | `flows/excel_export_test.dart` | 6 | Susunan kolom ekspor produk |
 | `flows/stock_in_test.dart` | 10 | Baca berkas stok, cocokkan produk, mode tambah vs set, laporan baris gagal |
 | `flows/stock_history_test.dart` | 9 | Jejak audit stok: produk baru, Excel, manual, penjualan, hapus, saringan, urutan |
@@ -60,6 +60,7 @@ hanya tampilan dan interaksinya yang diuji.
 | `flows/product_image_test.dart` | 2 | Alur gambar produk |
 | `unit/design_contract_test.dart` | 12 | Aturan `desainbrief.md` (font, warna, border, kontras) |
 | `unit/currency_format_test.dart` | 2 | Rupiah bulat tanpa pembagian 100 |
+| `unit/excel_number_test.dart` | 10 | Pembacaan angka Excel: pemisah ribuan lengkap, desimal pembulatan, teks campuran ditolak |
 | `unit/product_image_resolver_test.dart` | 3 | Prioritas sumber gambar (URL, byte, berkas) |
 
 **Yang TIDAK dicakup test otomatis** (perlu diklik manual): kamera/galeri,

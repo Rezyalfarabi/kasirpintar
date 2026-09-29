@@ -1,6 +1,7 @@
-import 'dart:typed_data';
-
 import 'package:excel/excel.dart';
+import 'package:flutter/foundation.dart';
+import 'package:kasir_pintar/data/datasources/excel/excel_normalizer.dart';
+import 'package:kasir_pintar/data/datasources/excel/excel_number.dart';
 
 /// Membaca berkas Excel yang sudah berisi daftar produk — mis. hasil tombol
 /// "Ekspor Excel" di halaman Produk — untuk memperbarui stok.
@@ -18,7 +19,10 @@ class ExcelStockService {
 
   StockSheetResult parseFromBytes(Uint8List bytes) {
     try {
-      final excel = Excel.decodeBytes(bytes);
+      // DEBUG sementara: lihat alur lengkap file -> workbook -> rows -> hasil.
+      debugPrint('[ExcelDebug] FILE BYTES: ${bytes.length}');
+
+      final excel = Excel.decodeBytes(normalizeExcelWorkbookTargets(bytes));
 
       if (excel.tables.isEmpty) {
         return const StockSheetResult(
@@ -27,7 +31,26 @@ class ExcelStockService {
         );
       }
 
+      // Pembaca memakai sheet pertama dari berkas, apapun namanya.
+      final sheetName = excel.tables.keys.first;
       final sheet = excel.tables.values.first;
+
+      debugPrint('[ExcelDebug] SHEETS: ${excel.tables.keys.toList()}');
+      debugPrint('[ExcelDebug] FIRST SHEET: $sheetName');
+      debugPrint('[ExcelDebug] TOTAL RAW ROWS: ${sheet.rows.length}');
+      for (var i = 0; i < sheet.rows.length; i++) {
+        debugPrint(
+          '[ExcelDebug] raw row $i: '
+          '${sheet.rows[i].map(_debugCell).toList()}',
+        );
+      }
+
+      final headers = _readHeaders(sheet);
+      debugPrint('[ExcelDebug] HEADERS: $headers');
+      for (final column in ['nama', 'barcode', 'harga', 'stok', 'kategori']) {
+        debugPrint('[ExcelDebug] INDEX $column = ${headers.indexOf(column)}');
+      }
+
       if (sheet.maxRows < 2) {
         return const StockSheetResult(
           success: false,
@@ -35,7 +58,6 @@ class ExcelStockService {
         );
       }
 
-      final headers = _readHeaders(sheet);
       final quantityColumn = _firstMatch(headers, quantityColumns);
       if (quantityColumn == null) {
         return StockSheetResult(
@@ -44,6 +66,7 @@ class ExcelStockService {
               'Kolom jumlah stok tidak ditemukan. Tambahkan salah satu kolom: ${quantityColumns.join(', ')}',
         );
       }
+      debugPrint('[ExcelDebug] QUANTITY COLUMN: $quantityColumn');
 
       final hasBarcode = headers.contains('barcode');
       final hasName = headers.contains('nama');
@@ -64,6 +87,11 @@ class ExcelStockService {
         for (var c = 0; c < headers.length && c < rawRow.length; c++) {
           cells[headers[c]] = rawRow[c];
         }
+
+        debugPrint(
+          '[ExcelDebug] data row excel ${i + 1} (raw index $i): '
+          '${rawRow.map(_debugCell).toList()}',
+        );
 
         final barcode = _cellText(cells['barcode']);
         final name = _cellText(cells['nama']);
@@ -106,6 +134,10 @@ class ExcelStockService {
         );
       }
 
+      debugPrint('[ExcelDebug] DATA ROWS: ${rows.length + errors.length}');
+      debugPrint('[ExcelDebug] VALID ROWS: ${rows.length}');
+      debugPrint('[ExcelDebug] ERROR ROWS: ${errors.length}');
+
       return StockSheetResult(
         success: true,
         rows: rows,
@@ -113,8 +145,15 @@ class ExcelStockService {
         quantityColumn: quantityColumn,
       );
     } catch (e) {
+      debugPrint('[ExcelDebug] EXCEL PARSE ERROR: $e');
       return StockSheetResult(success: false, error: 'Gagal membaca berkas: $e');
     }
+  }
+
+  /// Bentuk teks satu sel untuk log debug: nilai + tipe aslinya.
+  String _debugCell(Data? cell) {
+    if (cell == null) return 'null';
+    return '${cell.value}(${cell.value.runtimeType})';
   }
 
   /// Template kosong: pengguna yang belum pernah mengekspor tetap punya
@@ -166,6 +205,12 @@ class ExcelStockService {
   String _cellText(Data? cell) {
     final value = cell?.value;
     if (value == null) return '';
+    if (value is IntCellValue) return value.value.toString();
+    if (value is DoubleCellValue) {
+      final rounded = value.value.round();
+      if (value.value == rounded.toDouble()) return rounded.toString();
+      return value.value.toString();
+    }
     return value.toString().trim();
   }
 
@@ -174,23 +219,7 @@ class ExcelStockService {
     if (value == null) return null;
     if (value is IntCellValue) return value.value;
     if (value is DoubleCellValue) return value.value.round();
-    return _parseQuantity(value.toString());
-  }
-
-  /// Angka dari Excel bisa datang sebagai `24`, `24,0`, atau `1.024`.
-  /// Stok selalu bilangan bulat, jadi titik/koma ribuan dibuang dan desimal
-  /// dibulatkan — bukan dipotong begitu saja seperti pada kolom harga.
-  int? _parseQuantity(String raw) {
-    final text = raw.trim().replaceAll(' ', '');
-    if (text.isEmpty) return null;
-
-    final thousands = RegExp(r'^\d{1,3}(?:\.\d{3})+$|^\d{1,3}(?:,\d{3})+$');
-    if (thousands.hasMatch(text)) {
-      return int.tryParse(text.replaceAll('.', '').replaceAll(',', ''));
-    }
-
-    final decimal = double.tryParse(text.replaceAll(',', '.'));
-    return decimal?.round();
+    return parseExcelInt(value.toString(), roundDecimal: true);
   }
 }
 

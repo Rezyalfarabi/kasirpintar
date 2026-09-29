@@ -30,10 +30,62 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
+  <!-- Basis data drift memakai keduanya saat dibuka. Preload memulai download
+       lebih awal (paralel dengan mesin Flutter), jadi pembukaan basis data tidak
+       menambah jeda setelah UI pertama dirender. -->
+  <link rel="preload" href="sqlite3.wasm" as="fetch" type="application/wasm" crossorigin="anonymous">
+  <link rel="preload" href="drift_worker.js" as="script">
+
   <title>Kasir Pintar</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    /* Layar ini tampil sampai frame pertama Flutter menggambar di atasnya.
+       Flutter menambahkan elemennya ke DOM di atas loader, jadi loader
+       otomatis tertutup begitu aplikasi siap. */
+    #loading {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      background-color: #F5C400;
+    }
+    #loading .title {
+      color: #111111;
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+    #loading .spinner {
+      width: 30px;
+      height: 30px;
+      border: 3px solid rgba(17, 17, 17, 0.25);
+      border-top-color: #111111;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
-<body style="background-color: #F5F5F3">
+<body style="background-color: #F5C400">
+  <div id="loading">
+    <div class="title">Kasir Pintar</div>
+    <div class="spinner"></div>
+  </div>
   <script>
     // Build lama yang menempel di service worker membuat perubahan UI tidak
     // muncul walau aplikasi sudah dibangun ulang. Setiap kali dimuat, daftar

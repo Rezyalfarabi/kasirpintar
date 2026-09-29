@@ -185,7 +185,7 @@ Stok, Riwayat, dan pemindai.
   import Excel.
 - Conditional import dipakai hemat — hanya dua, tidak ada `kIsWeb` atau
   `defaultTargetPlatform` yang tercebar di seluruh kode.
-- 71 test otomatis mencakup parsing Excel, ekspor, struk PDF, jejak audit stok,
+- 93 test otomatis mencakup parsing Excel, ekspor, struk PDF, jejak audit stok,
   dan smoke test tampilan di lebar 360px.
 - `flutter analyze` bersih.
 
@@ -193,15 +193,30 @@ Stok, Riwayat, dan pemindai.
 
 | Temuan | Lokasi | Dampak |
 | --- | --- | --- |
-| Import produk dari Excel **tidak menerapkan batas panjang dan nilai** yang dipakai form manual: nama ≤ 100, kategori ≤ 50, barcode ≤ 50, harga ≤ 999999999, stok ≤ 999999. | `excel_import_service.dart:93` | Nilai di luar batas lolos dari Excel tapi ditolak form. Dua pintu masuk produk punya aturan berbeda. |
-| `stok` hasil impor dibaca `int.tryParse` **tanpa membuang pemisah ribuan**, berbeda dari `harga` dan dari `ExcelStockService`. | `excel_import_service.dart:88` | Teks `"10.000"` menjadi `0` tanpa pesan error. |
 | Kolom `kategori` **wajib ada sebagai header**, padahal nilainya boleh kosong dan di form kategori bersifat opsional. | `app_constants.dart:18` | Berkas tanpa kolom kategori ditolak, padahal tidak ada data yang hilang. |
-| **Barcode duplikat di dalam satu berkas** tidak dideteksi. | `excel_import_controller.dart:83` | Baris kedua dianggap "sudah ada" lalu dilewati atau ditimpa. **Sudah diperbaiki** — lihat catatan di bawah. |
 | Empat dependensi tidak terpakai di `lib/`: `permission_handler`, `cached_network_image`, `share_plus`, `uuid`. Resolver gambar memakai `NetworkImage` bawaan, bukan `cached_network_image`. | `pubspec.yaml` | Bobot build dan surface attack yang tidak perlu. |
 | `riverpod_annotation` + `riverpod_generator` ada sebagai dev dependency tetapi tidak dipakai — semua provider ditulis manual di `core/di/providers.dart`. | `pubspec.yaml` | codegen yang tidak perlu. |
 | Migrasi `schemaVersion` 1 → 2 → 3 belum lengkap. | `app_database.dart:92` | Pengguna versi lama bisa kehilangan data saat upgrade. |
 | Build Android gagal sebelum overhaul `compileSdk` (lihat bagian 8). | `android/build.gradle.kts` | Sudah diperbaiki. |
 | `mobile_scanner` dan `share_plus` masih menerapkan Kotlin Gradle Plugin lawas; Flutter akan menolak build seperti ini pada versi mendatang. | `pubspec.lock` | Peringatan, belum fatal. |
+
+### Perbaikan yang sudah selesai
+
+Empat jebakan pembacaan Excel yang pernah ada di `ExcelImportService` sudah
+dibereskan sekaligus:
+
+- **Barcode duplikat di dalam satu berkas** dideteksi dan dilaporkan
+  `Barcode sama dengan baris N`, bukan dilewati atau ditimpa diam-diam.
+- **Batas yang sama dengan form manual** ditegakkan: nama ≤ 100, kategori ≤ 50,
+  barcode ≤ 50, harga 1–999999999, stok 0–999999. Produk yang ditolak form pasti
+  ditolak impor, dan sebaliknya.
+- **Pemisah ribuan dibaca di `stok` maupun `harga`** lewat `parseExcelInt`
+  (`excel_number.dart`): `10.000`, `10,000`, dan `10000` setara. Desimal
+  (`15000.50`) dan teks bercampur (`Rp15.000`) ditolak dengan pesan yang jelas,
+  bukan diam-diam jadi angka yang salah.
+- **Nol pada kolom `harga`** dilaporkan sebagai `Harga harus lebih dari 0`,
+  bukan `Harga maksimal ...`. Batas bawah dan batas atas menghasilkan pesan
+  berbeda karena perbaikannya juga berbeda.
 
 ### Perbaikan barcode kembar dalam satu berkas
 
@@ -218,7 +233,7 @@ Tiga keputusan desain yang perlu dijaga kalau aturan ini diubah nanti:
   cacat ikut mengunci barcode-nya, baris sah berikutnya dengan barcode sama akan
   ditolak tanpa alasan yang benar karena pendahulunya tidak pernah masuk.
 - **Baris pertama menang, bukan baris terakhir.** Ini yang membuat hasilnya
-  bisa diprediksi, dan pesan errornya menyebut nomor baris pendahuluanya.
+  bisa diprediksi, dan pesan errornya menyebut nomor baris pendahulunya.
 
 `ExcelStockService` sudah punya aturan serupa dengan kunci
 `barcode:<nilai>` atau `nama:<nilai lowercase>` ketika barcode kosong — beda
@@ -257,7 +272,7 @@ Nilai bawaan Flutter yang dibiarkan karena sudah memenuhi kebutuhan:
 
 ```bash
 flutter analyze          # No issues found!
-flutter test             # 71 test, semua lulus
+flutter test             # 93 test, semua lulus
 flutter build apk --debug
 ```
 
@@ -275,11 +290,12 @@ build pertama di Mac. Yang perlu dikerjakan manual di Mac:
 
 ## 9. Rekomendasi Prioritas
 
-1. Samakan validasi `ExcelImportService` dengan `Validators` supaya dua pintu
-   masuk produk punya aturan sama.
-2. Perbaiki pembacaan `stok` di impor Excel agar membuang pemisah ribuan seperti
-   `harga`, dan laporkan angka yang gagal dibaca alih-alih diam-diam jadi 0.
-3. Tambahkan deteksi barcode duplikat di dalam satu berkas. — **selesai**
+1. Validasi impor Excel sudah disamakan dengan `Validators` — **selesai**:
+   batas panjang dan nilai `ExcelImportService` sekarang sama persis dengan
+   form manual.
+2. Pembacaan `stok` dan `harga` sudah lewat `parseExcelInt`, pemisah ribuan
+   terbaca dan angka yang gagal dibaca dilaporkan — **selesai**.
+3. Deteksi barcode duplikat di dalam satu berkas — **selesai**.
 4. Buang dependensi yang tidak terpakai: `permission_handler`,
    `cached_network_image`, `share_plus`, `uuid`, `riverpod_annotation`.
 5. Lengkapi migrasi `schemaVersion` 1 → 2 → 3 sebelum ada rilis ke pengguna lama.
